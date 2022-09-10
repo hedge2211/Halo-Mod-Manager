@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -13,6 +14,8 @@ namespace Halo_Mod_Manager
 {
     public partial class Form1 : Form
     {
+        private const char V = '\\';
+
         Settings settings { get; set; }
         public Form1()
         {
@@ -40,32 +43,97 @@ namespace Halo_Mod_Manager
             string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
             progressBar1.Maximum = files.Length;
             progressBar1.Value = 0;
-            foreach (string file in files)
+            
+            lblResult.Text += "Done";
+
+            foreach(var file in files)
             {
-                string path = DirSearch(Path.GetFileName(file));
-                if (path != null)
+                if (File.Exists(file))
                 {
-                    if (File.Exists(path + ".orig"))
+                    if (Path.GetExtension(file) == ".zip")
                     {
-                        lblResult.Text += Path.GetFileName(file) + " Already Modded File Replaced\n";
-                        File.Delete(path);
-                        File.Copy(file, path);
+                        string zipDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+                        ZipFile.ExtractToDirectory(file, zipDirectory);
+                        SearchDirectory(zipDirectory);
+                        Directory.Delete(zipDirectory, true);
                     }
                     else
                     {
-                        File.Move(path, path + ".orig");
-                        File.Copy(file, path);
-                        lblResult.Text += Path.GetFileName(file) + " Successful\n";
+                        SearchForFile(file);
                     }
+                }
+                else if (Directory.Exists(file))
+                {
+                    SearchDirectory(file);
+                }
+            }
+
+        }
+
+        private void SearchDirectory(string directory)
+        {
+            foreach( var file in Directory.GetFiles(directory))
+            {
+                SearchForFile(file);
+            }
+            foreach(var dir in Directory.GetDirectories(directory))
+            {
+                SearchDirectory(dir);
+            }
+        }
+
+        private void SearchForFile(string file)
+        {
+            string filename = Path.GetFileName(file);
+            string[] fileParts = file.Split(V);
+            
+            if (!settings.GamePath.Contains(fileParts[fileParts.Length - 2]))
+            {
+                filename = "";
+                for (int i = 0; i < fileParts.Length; i++)
+                {
+                    if (!settings.GamePath.Contains(fileParts[fileParts.Length - i - 1]))
+                    {
+                        if (DirSearch("\\" + fileParts[fileParts.Length - i - 1] + filename) != null)
+                        {
+                            filename = "\\" + fileParts[fileParts.Length - i - 1] + filename;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
                     
+                
+            }
+            string path = DirSearch(filename);
+            if (path != null)
+            {
+                if (File.Exists(path + ".orig"))
+                {
+                    lblResult.Text += Path.GetFileName(file) + " Already Modded File Replaced\n";
+                    File.Delete(path);
+                    File.Copy(file, path);
                 }
                 else
                 {
-                    lblResult.Text += Path.GetFileName(file) + " Not Found\n";
+                    File.Move(path, path + ".orig");
+                    File.Copy(file, path);
+                    lblResult.Text += Path.GetFileName(file) + " Successful\n";
                 }
-                progressBar1.Increment(1);
+
             }
-            lblResult.Text += "Done";
+            else
+            {
+                lblResult.Text += Path.GetFileName(file) + " Not Found\n";
+            }
+            progressBar1.Increment(1);
+            
         }
 
         private void btnRemoveMods_Click(object sender, EventArgs e)
@@ -121,7 +189,7 @@ namespace Halo_Mod_Manager
         {
             foreach (string f in Directory.GetFiles(sDir))
             {
-                if (Path.GetFileName(f) == sFile)
+                if (f.EndsWith(sFile))
                 {
                     return f;
                 }
